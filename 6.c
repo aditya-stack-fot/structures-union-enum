@@ -1,57 +1,110 @@
-// Unions
+/*
+Task: Memory-Efficient Typed Records and Safe Union Access.
+Sample run: The program prints structure/union sizes, alignments, member
+addresses and offsets, then safely displays five tagged values.
+Edge cases: a 19-character string fits, a longer string is rejected,
+records can change type, and only the active union member is read.
+*/
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
+#include <stdalign.h>
 
-typedef union {
-    int i;
-    float f;
-    char str[20];
-} UnionData;
+#define TEXT_SIZE 20
 
 typedef struct {
-    int i;
-    float f;
-    char str[20];
+    int number;
+    float decimal;
+    char text[TEXT_SIZE];
 } StructData;
 
-int main() {
+typedef union {
+    int number;
+    float decimal;
+    char text[TEXT_SIZE];
+} UnionData;
 
-    UnionData udata;
+typedef enum { VALUE_INT, VALUE_FLOAT, VALUE_TEXT } ValueType;
 
-    StructData sdata;
-    // sdata = (StructData) {10, 220.5, "Struct Programming"};
-    sdata.i = 10;
-    strcpy(sdata.str, "Struct Programming");
-    sdata.f = 220.5;
+typedef struct {
+    UnionData data;
+    ValueType type;
+} TaggedValue;
 
-    udata.i = 10;
-    printf("udata.i: %d\n", udata.i);
+int set_integer(TaggedValue *value, int number) {
+    if (value == NULL) return 0;
+    value->data.number = number;
+    value->type = VALUE_INT;
+    return 1;
+}
 
-    strcpy(udata.str, "Union Programming");
-    printf("udata.str: %s\n", udata.str);
+int set_float(TaggedValue *value, float number) {
+    if (value == NULL) return 0;
+    value->data.decimal = number;
+    value->type = VALUE_FLOAT;
+    return 1;
+}
 
-    udata.f = 220.5;
-    printf("udata.f: %.2f\n\n", udata.f);
+int set_text(TaggedValue *value, const char *text) {
+    if (value == NULL || text == NULL || strlen(text) >= TEXT_SIZE) return 0;
+    strcpy(value->data.text, text);
+    value->type = VALUE_TEXT;
+    return 1;
+}
 
-    // Now see the values after overwriting
-    printf("After overwriting:\n");
-    printf("udata.i: %d\n", udata.i);
-    printf("udata.str: %s\n", udata.str);
-    printf("udata.f: %.2f\n\n", udata.f);
+void display_tagged_value(const TaggedValue *value) {
+    if (value == NULL) { printf("Invalid record.\n"); return; }
+    if (value->type == VALUE_INT) printf("Integer: %d\n", value->data.number);
+    else if (value->type == VALUE_FLOAT) printf("Float: %.2f\n", value->data.decimal);
+    else if (value->type == VALUE_TEXT) printf("Text: %s\n", value->data.text);
+    else printf("Invalid value tag.\n");
+}
 
-    // Memory Addresses - Union
-    printf("udata.i: %p\n", &udata.i);
-    printf("udata.str: %p\n", &udata.str);
-    printf("udata.f: %p\n\n", &udata.f);
+int main(void) {
+    StructData s;
+    UnionData u;
+    TaggedValue records[5];
+    int i;
+    s.number = 10;
+    s.decimal = 220.5f;
+    strcpy(s.text, "Structure");
 
-    // Memory Addresses - Struct
-    printf("sdata.i: %p\n", &sdata.i);
-    printf("sdata.str: %p\n", &sdata.str);
-    printf("sdata.f: %p\n\n", &sdata.f);
+    printf("STRUCTURE ANALYSIS\n");
+    printf("Size: %zu bytes | Alignment: %zu bytes\n", sizeof(StructData), alignof(StructData));
+    printf("Address of structure: %p\n", (void *)&s);
+    printf("number address: %p | offset: %zu\n", (void *)&s.number, offsetof(StructData, number));
+    printf("decimal address: %p | offset: %zu\n", (void *)&s.decimal, offsetof(StructData, decimal));
+    printf("text address: %p | offset: %zu\n", (void *)s.text, offsetof(StructData, text));
 
-    printf("Size of the Union - %lu\n", sizeof(UnionData));
-    printf("Size of the Structure - %lu\n", sizeof(StructData));
+    printf("\nUNION ANALYSIS\n");
+    printf("Size: %zu bytes | Alignment: %zu bytes\n", sizeof(UnionData), alignof(UnionData));
+    printf("number address: %p\n", (void *)&u.number);
+    printf("decimal address: %p\n", (void *)&u.decimal);
+    printf("text address: %p\n", (void *)u.text);
+    printf("100 structures: %zu bytes\n", 100 * sizeof(StructData));
+    printf("100 unions: %zu bytes\n", 100 * sizeof(UnionData));
 
+    set_integer(&records[0], 10);
+    set_float(&records[1], 220.5f);
+    set_text(&records[2], "Union Programming");
+    set_integer(&records[3], -25);
+    if (!set_text(&records[4], "1234567890123456789")) printf("String did not fit.\n");
+    printf("\nTAGGED RECORDS (size: %zu bytes)\n", sizeof(TaggedValue));
+    for (i = 0; i < 5; i++) {
+        printf("Record %d: ", i + 1);
+        display_tagged_value(&records[i]);
+    }
+    if (!set_text(&records[4], "This string is too long")) printf("Overlength string rejected.\n");
+    records[4].type = (ValueType)99;
+    printf("Invalid tag test: ");
+    display_tagged_value(&records[4]);
+    set_text(&records[4], "Restored");
+    set_integer(&records[0], 99);
+    set_text(&records[0], "Changed to text");
+    set_float(&records[0], 4.5f);
+    printf("Record 1 after INT -> TEXT -> FLOAT: ");
+    display_tagged_value(&records[0]);
+
+    printf("\nOBSERVATION\nA union shares memory between its members, so it can save space when\nonly one type is needed at a time. Its values cannot coexist independently.\nStructure fields have separate storage; padding may be added for alignment.\n");
     return 0;
 }
